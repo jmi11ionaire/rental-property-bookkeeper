@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Working PDF to CSV Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            background: #fafafa;
+        }
+        .upload-area.dragover {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #f59e0b;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #d97706;
+        }
+        .btn-success {
+            background: #10b981;
+        }
+        .btn-success:hover {
+            background: #059669;
+        }
+        .pdf-content {
+            display: none;
+            margin-top: 20px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            display: none;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .platform-buttons {
+            margin: 20px 0;
+        }
+        .platform-btn {
+            background: #e5e7eb;
+            color: #374151;
+            margin-right: 10px;
+        }
+        .platform-btn.active {
+            background: #f59e0b;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 Working PDF to CSV Converter</h1>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>Drag and drop your PDF files here or click to browse</p>
+            <input type="file" id="fileInput" accept=".pdf" multiple>
+            <button class="btn" onclick="document.getElementById('fileInput').click()">
+                Choose PDF Files
+            </button>
+        </div>
+
+        <div class="platform-buttons">
+            <label><strong>Platform Type:</strong></label><br>
+            <button class="btn platform-btn active" data-platform="auto">Auto-Detect</button>
+            <button class="btn platform-btn" data-platform="ebay">eBay</button>
+            <button class="btn platform-btn" data-platform="etsy">Etsy</button>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="pdf-content" id="pdfContent">
+            <h3>Extracted PDF Text</h3>
+            <textarea id="pdfText" readonly></textarea>
+            
+            <h3>Extracted Sales Data</h3>
+            <div id="extractedData"></div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn btn-success" onclick="downloadCSV()">
+                    Download CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let extractedSales = [];
+        let selectedPlatform = 'auto';
+
+        // Platform button handling
+        document.querySelectorAll('.platform-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                selectedPlatform = this.dataset.platform;
+                
+                const pdfText = document.getElementById('pdfText').value;
+                if (pdfText) {
+                    parsePDFContent(pdfText);
+                }
+            });
+        });
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFiles(files);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFiles(e.target.files);
+            }
+        });
+
+        async function handleFiles(files) {
+            console.log('Processing files:', files.length);
+            showStatus('Processing files...', 'info');
+            
+            let allText = '';
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                console.log('Processing file:', file.name, file.type);
+                
+                if (file.type !== 'application/pdf') {
+                    showStatus(`Skipping ${file.name} - not a PDF file`, 'error');
+                    continue;
+                }
+                
+                try {
+                    const text = await extractTextFromPDF(file);
+                    allText += `\n\n--- ${file.name} ---\n\n${text}`;
+                    console.log(`Extracted ${text.length} characters from ${file.name}`);
+                } catch (error) {
+                    console.error('Error processing file:', error);
+                    showStatus(`Error processing ${file.name}: ${error.message}`, 'error');
+                }
+            }
+            
+            if (allText) {
+                document.getElementById('pdfText').value = allText;
+                document.getElementById('pdfContent').style.display = 'block';
+                parsePDFContent(allText);
+            } else {
+                showStatus('No text extracted from files', 'error');
+            }
+        }
+
+        async function extractTextFromPDF(file) {
+            console.log('Starting PDF text extraction for:', file.name);
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            let fullText = '';
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const text = textContent.items.map(item => item.str).join(' ');
+                fullText += text + '\n';
+            }
+            
+            console.log('PDF text extraction complete. Length:', fullText.length);
+            return fullText;
+        }
+
+        function parsePDFContent(text) {
+            console.log('Starting PDF content parsing...');
+            extractedSales = [];
+            
+            const platform = detectPlatform(text);
+            console.log('Detected platform:', platform);
+            
+            if (platform === 'ebay') {
+                parseEbayPDF(text);
+            } else if (platform === 'etsy') {
+                parseEtsyPDF(text);
+            } else {
+                parseGenericPDF(text);
+            }
+            
+            console.log('Total sales extracted:', extractedSales.length);
+            displayExtractedData();
+            showStatus(`Extracted ${extractedSales.length} sales records using ${platform} parser`, 'success');
+        }
+
+        function detectPlatform(text) {
+            if (selectedPlatform !== 'auto') return selectedPlatform;
+            
+            const textLower = text.toLowerCase();
+            if (textLower.includes('ebay')) return 'ebay';
+            if (textLower.includes('etsy')) return 'etsy';
+            return 'generic';
+        }
+
+        function parseEbayPDF(text) {
+            console.log('Using eBay parser...');
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            let currentSale = null;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                const orderLineMatch = line.match(/^([A-Za-z]+\s+\d+)\s+([\d-]+)\s+(.+)/);
+                if (orderLineMatch) {
+                    if (currentSale) {
+                        extractedSales.push(currentSale);
+                    }
+                    
+                    const date = orderLineMatch[1];
+                    const orderId = orderLineMatch[2];
+                    const itemStart = orderLineMatch[3];
+                    
+                    currentSale = {
+                        date: formatDate(date),
+                        itemName: itemStart,
+                        brand: '',
+                        platform: 'ebay',
+                        purchasePrice: '0.00',
+                        salePrice: '0.00',
+                        platformFees: '0.00',
+                        shippingCost: '0.00',
+                        buyerUsername: ''
+                    };
+                }
+                
+                if (currentSale && line.includes('(') && line.includes('item')) {
+                    const itemMatch = line.match(/(.+?)\s*\(\d+\s+item/);
+                    if (itemMatch) {
+                        currentSale.itemName += ' ' + itemMatch[1];
+                        currentSale.itemName = currentSale.itemName.trim();
+                    }
+                }
+                
+                if (currentSale && line.includes('Buyer ID:')) {
+                    const buyerMatch = line.match(/Buyer ID:\s*([^\s]+)/);
+                    if (buyerMatch) {
+                        currentSale.buyerUsername = buyerMatch[1];
+                    }
+                }
+                
+                if (currentSale && line.includes('Sales processed')) {
+                    const priceMatch = line.match(/\$([0-9.,]+)/);
+                    if (priceMatch) {
+                        currentSale.salePrice = priceMatch[1].replace(',', '');
+                    }
+                }
+                
+                if (currentSale && line.includes('Fees')) {
+                    const feeMatch = line.match(/-?\$([0-9.,]+)/);
+                    if (feeMatch) {
+                        currentSale.platformFees = feeMatch[1].replace(',', '');
+                    }
+                }
+                
+                if (currentSale && line.includes('USPS') && line.includes('-$')) {
+                    const shippingMatch = line.match(/-\$([0-9.,]+)/);
+                    if (shippingMatch) {
+                        currentSale.shippingCost = shippingMatch[1].replace(',', '');
+                    }
+                }
+            }
+            
+            if (currentSale) {
+                extractedSales.push(currentSale);
+            }
+        }
+
+        function parseEtsyPDF(text) {
+            console.log('Using Etsy parser...');
+            const orderPattern = /Order\s+#(\d+)\s+([^Ship]+?)(?=\s+Ship)/g;
+            
+            let orderMatch;
+            while ((orderMatch = orderPattern.exec(text)) !== null) {
+                const orderNum = orderMatch[1];
+                const buyerName = orderMatch[2].trim();
+                
+                const orderStartIndex = orderMatch.index;
+                const nextOrderIndex = text.indexOf('Order #', orderStartIndex + 1);
+                const orderSection = nextOrderIndex > -1 
+                    ? text.substring(orderStartIndex, nextOrderIndex)
+                    : text.substring(orderStartIndex);
+                
+                const dateMatch = orderSection.match(/Order date\s+([^Payment]+?)(?=\s+Payment)/);
+                const orderDate = dateMatch ? formatDate(dateMatch[1].trim()) : '';
+                
+                const itemMatch = orderSection.match(/via\s+USPS\s+(\d+)\s+item\s+(.+?)\s+(\d+)\s+x\s+\$([0-9.,]+)/);
+                if (itemMatch) {
+                    const itemName = itemMatch[2].trim();
+                    const salePrice = itemMatch[4].replace(',', '');
+                    
+                    const shippingMatch = orderSection.match(/Shipping total\s+\$([0-9.,]+)/);
+                    const shippingCost = shippingMatch ? shippingMatch[1].replace(',', '') : '0.00';
+                    
+                    const platformFees = (parseFloat(salePrice) * 0.10).toFixed(2);
+                    
+                    extractedSales.push({
+                        date: orderDate,
+                        itemName: itemName,
+                        brand: '',
+                        platform: 'etsy',
+                        purchasePrice: '0.00',
+                        salePrice: salePrice,
+                        platformFees: platformFees,
+                        shippingCost: shippingCost,
+                        buyerUsername: buyerName.replace(/[()]/g, '')
+                    });
+                }
+            }
+        }
+
+        function parseGenericPDF(text) {
+            console.log('Using generic parser...');
+            const lines = text.split('\n');
+            const sales = [];
+            
+            const dateRegex = /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})|(\w+\s+\d{1,2},?\s+\d{4})/;
+            const priceRegex = /\$?([\d,]+\.?\d*)/g;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const dateMatch = line.match(dateRegex);
+                const prices = [...line.matchAll(priceRegex)];
+                
+                if (dateMatch && prices.length > 0) {
+                    sales.push({
+                        date: formatDate(dateMatch[0]),
+                        itemName: 'Item from ' + dateMatch[0],
+                        brand: '',
+                        platform: 'other',
+                        purchasePrice: '0.00',
+                        salePrice: prices[0][1].replace(',', ''),
+                        platformFees: prices[1] ? prices[1][1].replace(',', '') : '0.00',
+                        shippingCost: prices[2] ? prices[2][1].replace(',', '') : '0.00',
+                        buyerUsername: ''
+                    });
+                }
+            }
+            
+            extractedSales = sales;
+        }
+
+        function formatDate(dateStr) {
+            const months = {
+                'Jan': '01', 'January': '01', 'Feb': '02', 'February': '02',
+                'Mar': '03', 'March': '03', 'Apr': '04', 'April': '04',
+                'May': '05', 'Jun': '06', 'June': '06', 'Jul': '07', 'July': '07',
+                'Aug': '08', 'August': '08', 'Sep': '09', 'September': '09',
+                'Oct': '10', 'October': '10', 'Nov': '11', 'November': '11',
+                'Dec': '12', 'December': '12'
+            };
+            
+            let match;
+            
+            if ((match = /(\w+)\s+(\d+)/.exec(dateStr))) {
+                const month = months[match[1]] || '01';
+                const day = match[2].padStart(2, '0');
+                const year = new Date().getFullYear();
+                return `${month}/${day}/${year}`;
+            }
+            
+            if ((match = /(\w+)\s+(\d+),?\s+(\d{4})/.exec(dateStr))) {
+                const month = months[match[1]] || '01';
+                const day = match[2].padStart(2, '0');
+                const year = match[3];
+                return `${month}/${day}/${year}`;
+            }
+            
+            if ((match = /(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/.exec(dateStr))) {
+                const month = match[1].padStart(2, '0');
+                const day = match[2].padStart(2, '0');
+                const year = match[3].length === 2 ? '20' + match[3] : match[3];
+                return `${month}/${day}/${year}`;
+            }
+            
+            return dateStr;
+        }
+
+        function displayExtractedData() {
+            const container = document.getElementById('extractedData');
+            if (extractedSales.length === 0) {
+                container.innerHTML = '<p>No sales data extracted. Try selecting a different platform.</p>';
+                return;
+            }
+
+            let html = '<table><thead><tr>';
+            html += '<th>Date</th><th>Item Name</th><th>Platform</th>';
+            html += '<th>Sale Price</th><th>Fees</th><th>Shipping</th><th>Buyer</th>';
+            html += '</tr></thead><tbody>';
+
+            extractedSales.forEach(sale => {
+                html += '<tr>';
+                html += `<td>${sale.date}</td>`;
+                html += `<td>${sale.itemName}</td>`;
+                html += `<td>${sale.platform}</td>`;
+                html += `<td>$${sale.salePrice}</td>`;
+                html += `<td>$${sale.platformFees}</td>`;
+                html += `<td>$${sale.shippingCost}</td>`;
+                html += `<td>${sale.buyerUsername}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function downloadCSV() {
+            if (extractedSales.length === 0) {
+                showStatus('No data to download', 'error');
+                return;
+            }
+
+            const headers = ['Date', 'Item Name', 'Brand', 'Platform', 'Purchase Price', 'Sale Price', 'Platform Fees', 'Shipping Cost', 'Buyer Username'];
+            let csv = headers.join(',') + '\n';
+
+            extractedSales.forEach(sale => {
+                const row = [
+                    sale.date,
+                    `"${sale.itemName.replace(/"/g, '""')}"`,
+                    `"${sale.brand.replace(/"/g, '""')}"`,
+                    sale.platform,
+                    sale.purchasePrice,
+                    sale.salePrice,
+                    sale.platformFees,
+                    sale.shippingCost,
+                    sale.buyerUsername
+                ];
+                csv += row.join(',') + '\n';
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reseller_sales_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showStatus('CSV downloaded successfully!', 'success');
+        }
+
+        function showStatus(message, type) {
+            console.log('Status:', message, type);
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
