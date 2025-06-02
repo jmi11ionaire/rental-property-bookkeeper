@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rental Property Bookkeeper</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1><i class="fas fa-home"></i> Rental Property Bookkeeper</h1>
+                <div class="header-actions">
+                    <div class="dropdown">
+                        <button id="exportBtn" class="btn btn-secondary dropdown-toggle" title="Export Data">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                        <div class="dropdown-menu" id="exportMenu">
+                            <button class="dropdown-item" onclick="app.exportData('csv')">Export as CSV</button>
+                            <button class="dropdown-item" onclick="app.exportData('json')">Export as JSON</button>
+                            <div class="dropdown-divider"></div>
+                            <button class="dropdown-item" onclick="app.downloadTemplate('all')">Download CSV Template</button>
+                            <button class="dropdown-item" onclick="app.downloadTemplate('transactions')">Transactions Template</button>
+                            <button class="dropdown-item" onclick="app.downloadTemplate('accounts')">Accounts Template</button>
+                        </div>
+                    </div>
+                    <button id="importBtn" class="btn btn-secondary" title="Import Data">
+                        <i class="fas fa-upload"></i> Import
+                    </button>
+                    <input type="file" id="importFile" accept=".csv,.json" style="display: none;">
+                </div>
+            </div>
+        </header>
+
+        <!-- Dashboard Overview -->
+        <section class="dashboard">
+            <div class="dashboard-cards">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-dollar-sign"></i> Total Income</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="amount" id="totalIncome">$0.00</div>
+                        <div class="period">This Year</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-receipt"></i> Total Expenses</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="amount expense" id="totalExpenses">$0.00</div>
+                        <div class="period">This Year</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-line"></i> Net Income</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="amount" id="netIncome">$0.00</div>
+                        <div class="period">This Year</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-shield-alt"></i> Security Deposits</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="amount" id="totalDeposits">$0.00</div>
+                        <div class="period">Held</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="income">
+                <i class="fas fa-plus-circle"></i> Income
+            </button>
+            <button class="tab-btn" data-tab="expenses">
+                <i class="fas fa-minus-circle"></i> Expenses
+            </button>
+            <button class="tab-btn" data-tab="deposits">
+                <i class="fas fa-shield-alt"></i> Security Deposits
+            </button>
+            <button class="tab-btn" data-tab="accounts">
+                <i class="fas fa-university"></i> Accounts
+            </button>
+            <button class="tab-btn" data-tab="reports">
+                <i class="fas fa-chart-bar"></i> Reports
+            </button>
+        </nav>
+
+        <!-- Tab Content -->
+        <main class="tab-content">
+            <!-- Income Tab -->
+            <div id="income" class="tab-panel active">
+                <div class="panel-header">
+                    <h2>Rental Income</h2>
+                    <button id="addIncomeBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Income
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="incomeTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Property</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Description</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Expenses Tab -->
+            <div id="expenses" class="tab-panel">
+                <div class="panel-header">
+                    <h2>Expenses</h2>
+                    <button id="addExpenseBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Expense
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="expenseTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Property</th>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Description</th>
+                                <th>Tax Deductible</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Security Deposits Tab -->
+            <div id="deposits" class="tab-panel">
+                <div class="panel-header">
+                    <h2>Security Deposits</h2>
+                    <button id="addDepositBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Deposit
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="depositTable">
+                        <thead>
+                            <tr>
+                                <th>Date Received</th>
+                                <th>Property</th>
+                                <th>Tenant</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Accounts Tab -->
+            <div id="accounts" class="tab-panel">
+                <div class="panel-header">
+                    <h2>Accounts & Properties</h2>
+                    <div class="account-buttons">
+                        <button id="addBankAccountBtn" class="btn btn-primary">
+                            <i class="fas fa-university"></i> Add Bank Account
+                        </button>
+                        <button id="addCreditCardBtn" class="btn btn-primary">
+                            <i class="fas fa-credit-card"></i> Add Credit Card
+                        </button>
+                        <button id="addPropertyBtn" class="btn btn-primary">
+                            <i class="fas fa-home"></i> Add Property
+                        </button>
+                    </div>
+                </div>
+                <div class="accounts-grid">
+                    <div class="account-section">
+                        <h3><i class="fas fa-university"></i> Bank Accounts</h3>
+                        <div class="table-container">
+                            <table id="bankAccountTable">
+                                <thead>
+                                    <tr>
+                                        <th>Account Name</th>
+                                        <th>Bank</th>
+                                        <th>Account Type</th>
+                                        <th>Last 4 Digits</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="account-section">
+                        <h3><i class="fas fa-credit-card"></i> Credit Cards</h3>
+                        <div class="table-container">
+                            <table id="creditCardTable">
+                                <thead>
+                                    <tr>
+                                        <th>Card Name</th>
+                                        <th>Bank/Issuer</th>
+                                        <th>Card Type</th>
+                                        <th>Last 4 Digits</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="account-section full-width">
+                        <h3><i class="fas fa-home"></i> Properties</h3>
+                        <div class="table-container">
+                            <table id="propertyTable">
+                                <thead>
+                                    <tr>
+                                        <th>Property Address</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reports" class="tab-panel">
+                <div class="panel-header">
+                    <h2>Financial Reports</h2>
+                    <div class="report-filters">
+                        <select id="reportYear">
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                            <option value="2022">2022</option>
+                        </select>
+                        <button id="generateReportBtn" class="btn btn-primary">
+                            <i class="fas fa-file-alt"></i> Generate Report
+                        </button>
+                    </div>
+                </div>
+                <div id="reportContent">
+                    <div class="report-section">
+                        <h3>Income Summary</h3>
+                        <div id="incomeReport"></div>
+                    </div>
+                    <div class="report-section">
+                        <h3>Expense Summary</h3>
+                        <div id="expenseReport"></div>
+                    </div>
+                    <div class="report-section">
+                        <h3>Tax Deductible Expenses</h3>
+                        <div id="taxReport"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for Adding/Editing Items -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Add Item</h3>
+                <button class="close-btn" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="itemForm">
+                    <div class="form-group">
+                        <label for="itemDate">Date</label>
+                        <input type="date" id="itemDate" name="date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="itemProperty">Property</label>
+                        <input type="text" id="itemProperty" name="property" required placeholder="Property address or name">
+                    </div>
+                    <div class="form-group" id="paidByGroup">
+                        <label for="itemPaidBy">Paid By</label>
+                        <input type="text" id="itemPaidBy" name="paidBy" placeholder="Tenant name or payer">
+                    </div>
+                    <div class="form-group" id="bankAccountGroup">
+                        <label for="itemBankAccount">Bank Account</label>
+                        <select id="itemBankAccount" name="bankAccount">
+                            <option value="">Select Bank Account</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="typeGroup">
+                        <label for="itemType">Type</label>
+                        <select id="itemType" name="type">
+                            <option value="rent">Monthly Rent</option>
+                            <option value="late_fee">Late Fee</option>
+                            <option value="pet_fee">Pet Fee</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="categoryGroup">
+                        <label for="itemCategory">Category</label>
+                        <select id="itemCategory" name="category">
+                            <option value="maintenance">Maintenance & Repairs</option>
+                            <option value="utilities">Utilities</option>
+                            <option value="insurance">Insurance</option>
+                            <option value="property_tax">Property Tax</option>
+                            <option value="management">Property Management</option>
+                            <option value="legal">Legal & Professional</option>
+                            <option value="advertising">Advertising</option>
+                            <option value="supplies">Supplies</option>
+                            <option value="travel">Travel</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="itemAmount">Amount ($)</label>
+                        <input type="number" id="itemAmount" name="amount" step="0.01" required>
+                    </div>
+                    <div class="form-group" id="creditCardGroup">
+                        <label for="itemCreditCard">Credit Card (for expenses)</label>
+                        <select id="itemCreditCard" name="creditCard">
+                            <option value="">Cash/Check/Bank Transfer</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="itemDescription">Description</label>
+                        <input type="text" id="itemDescription" name="description" placeholder="Optional description">
+                    </div>
+                    <div class="form-group" id="tenantGroup">
+                        <label for="itemTenant">Tenant Name</label>
+                        <input type="text" id="itemTenant" name="tenant" placeholder="Tenant name">
+                    </div>
+                    <div class="form-group" id="statusGroup">
+                        <label for="itemStatus">Status</label>
+                        <select id="itemStatus" name="status">
+                            <option value="held">Held</option>
+                            <option value="returned">Returned</option>
+                            <option value="applied">Applied to Damages</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="taxDeductibleGroup">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="itemTaxDeductible" name="taxDeductible">
+                            <span class="checkmark"></span>
+                            Tax Deductible
+                        </label>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="cancelBtn" class="btn btn-secondary">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
